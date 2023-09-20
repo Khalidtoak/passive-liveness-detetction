@@ -16,12 +16,16 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,28 +37,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
+
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.camera.core.Preview as camPreview
 import com.example.passivelivenessdetetction.ui.theme.PassiveLivenessDetetctionTheme
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
-    private val permissionsToRequest = arrayOf(
-        Manifest.permission.CAMERA,
-    )
-    fun openAppSettings() {
+    private fun openAppSettings() {
         Intent(
             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.fromParts("package", packageName, null)
         ).also(::startActivity)
     }
-    @OptIn(ExperimentalPermissionsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -92,7 +97,7 @@ class MainActivity : ComponentActivity() {
                                 }
                         }
                     } else {
-                        CameraPreview()
+                        CameraPreview(mainViewModel)
                     }
                 }
             }
@@ -101,7 +106,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun CameraPreview() {
+fun CameraPreview(mainViewModel: MainViewModel) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -115,7 +120,6 @@ fun CameraPreview() {
         var cameraSelector: CameraSelector? by remember { mutableStateOf(null) }
         var camera: Camera? by remember { mutableStateOf(null) }
         var preview by remember { mutableStateOf<androidx.camera.core.Preview?>(null) }
-        val lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_FRONT) }
 
         AndroidView(
             factory = { ctx ->
@@ -124,7 +128,7 @@ fun CameraPreview() {
                 cameraProviderFuture.addListener(
                     {
                         cameraSelector = CameraSelector.Builder()
-                            .requireLensFacing(lensFacing)
+                            .requireLensFacing(mainViewModel.camLensFacing.intValue)
                             .build()
                         val imageAnalysis: ImageAnalysis =
                             ImageAnalysis.Builder()
@@ -132,7 +136,7 @@ fun CameraPreview() {
                                 .build()
                                 .also {
                                     it.setAnalyzer(executor) { imageProxy ->
-
+                                        mainViewModel.onFrameRecieved(imageProxy)
                                     }
                                 }
                         try {
@@ -151,9 +155,15 @@ fun CameraPreview() {
                 }.also { preview = it }
                 previewView
             },
+            modifier = Modifier.fillMaxSize()
+        )
+        Text(
+            text = if (mainViewModel.lifeDetected.value) "Live" else "Not Live",
             modifier = Modifier
-                .clipToBounds()
-                .matchParentSize()
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+            color = Color.White,
+            fontSize = 30.sp
         )
     }
 }
