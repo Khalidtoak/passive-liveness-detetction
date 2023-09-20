@@ -13,8 +13,8 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(private val faceAnalyzer: FaceAnalyzer) : ViewModel() {
     val permissionGranted = mutableStateOf(false)
-    val lifeDetected = mutableStateOf(false)
-    val camLensFacing = mutableIntStateOf(CameraSelector.LENS_FACING_FRONT)
+    val lifeDetected = mutableStateOf("")
+    val camLensFacing = mutableStateOf(CameraSelector.DEFAULT_FRONT_CAMERA)
     fun onPermissionGranted(permissionGranted: Boolean) {
         this.permissionGranted.value = permissionGranted
     }
@@ -22,6 +22,14 @@ class MainViewModel @Inject constructor(private val faceAnalyzer: FaceAnalyzer) 
     fun onFrameRecieved(frame: ImageProxy) {
         faceAnalyzer.analyzeFace(frame) {
             lifeDetected.value = it
+        }
+    }
+
+    fun switchCamera() {
+        if (camLensFacing.value == CameraSelector.DEFAULT_BACK_CAMERA) {
+            camLensFacing.value = CameraSelector.DEFAULT_FRONT_CAMERA
+        } else {
+            camLensFacing.value = CameraSelector.DEFAULT_BACK_CAMERA
         }
     }
 

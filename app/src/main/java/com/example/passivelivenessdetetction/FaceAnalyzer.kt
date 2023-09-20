@@ -21,31 +21,31 @@ class FaceAnalyzer @Inject constructor(private val faceDetector: FaceDetector) {
     private var previousFace: Face? = null
 
     @SuppressLint("UnsafeOptInUsageError")
-    fun analyzeFace(imageProxy: ImageProxy, callback: (Boolean) -> Unit) {
+    fun analyzeFace(imageProxy: ImageProxy, callback: (String) -> Unit) {
         imageProxy.image?.let { image ->
             InputImage.fromMediaImage(image, imageProxy.imageInfo.rotationDegrees)
         }.also { inputImage ->
             inputImage?.let {
                 faceDetector.process(inputImage)
                     .addOnSuccessListener { faces ->
-                        if (faces.isNotEmpty()) {
+                        if (faces.size == 1) {
                             val currentFace = faces[0]
 
                             if (previousFace != null) {
                                 val hasMoved = detectMovement(previousFace!!, currentFace)
                                 Log.d("Face Analyzer", "movement detected $hasMoved")
-                                callback(hasMoved)
+                                callback(if (hasMoved) "Live" else "Not Live")
                             }
 
                             previousFace = currentFace
                         } else {
-                            callback(false)
+                            callback(if (faces.size > 1) "Only one face allowed" else "No face detected")
                         }
                     }
                     .addOnFailureListener {
                         // Handle error, for example:
                         Log.d("Face Analyzer", "failed $it")
-                        callback(false)
+                        callback("Face detection failed")
                     }.addOnCompleteListener {
                         imageProxy.close()
                     }
@@ -61,10 +61,10 @@ class FaceAnalyzer @Inject constructor(private val faceDetector: FaceDetector) {
             notLiveCount = 0
         }
         // if its the same face and it has been detected as live more than 10 times, then its live and vice versa
-        if (previousFace.trackingId == currentFace.trackingId && liveCount > 10) {
+        if (previousFace.trackingId == currentFace.trackingId && liveCount > 20) {
             return true
         }
-        if (previousFace.trackingId == currentFace.trackingId && notLiveCount > 10) {
+        if (previousFace.trackingId == currentFace.trackingId && notLiveCount > 5) {
             return false
         }
         val previousNoseBase = previousFace.getLandmark(FaceLandmark.NOSE_BASE)?.position

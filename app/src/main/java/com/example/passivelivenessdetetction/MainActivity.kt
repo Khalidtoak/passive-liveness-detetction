@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.clickable
@@ -60,6 +61,7 @@ class MainActivity : ComponentActivity() {
             Uri.fromParts("package", packageName, null)
         ).also(::startActivity)
     }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -73,7 +75,7 @@ class MainActivity : ComponentActivity() {
                     val cameraPermissionResultLauncher = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.RequestPermission(),
                         onResult = { isGranted ->
-                           mainViewModel.onPermissionGranted(isGranted)
+                            mainViewModel.onPermissionGranted(isGranted)
                         }
                     )
 
@@ -83,21 +85,31 @@ class MainActivity : ComponentActivity() {
                             verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                                Button(onClick = {
-                                    val isNotPermanentyDeclined = shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)
-                                    if (isNotPermanentyDeclined) {
-                                        openAppSettings()
-                                    } else {
-                                        cameraPermissionResultLauncher.launch(
-                                            Manifest.permission.CAMERA
-                                        )
-                                    }
-                                }) {
-                                    Text(text = "Grant camera permission")
+                            Button(onClick = {
+                                val isNotPermanentyDeclined =
+                                    shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)
+                                if (isNotPermanentyDeclined) {
+                                    openAppSettings()
+                                } else {
+                                    cameraPermissionResultLauncher.launch(
+                                        Manifest.permission.CAMERA
+                                    )
                                 }
+                            }) {
+                                Text(text = "Open Camera")
+                            }
                         }
                     } else {
-                        CameraPreview(mainViewModel)
+                        CameraPreview(
+                            cameraSelector = mainViewModel.camLensFacing.value,
+                            lifeDetectionString = mainViewModel.lifeDetected.value,
+                            onSwitchCameraClicked = {
+                                mainViewModel.switchCamera()
+                            },
+                            onFrameRecieved = {
+                                mainViewModel.onFrameRecieved(it)
+                            },
+                        )
                     }
                 }
             }
@@ -106,7 +118,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun CameraPreview(mainViewModel: MainViewModel) {
+fun CameraPreview(
+    onFrameRecieved: (ImageProxy) -> Unit, cameraSelector: CameraSelector, lifeDetectionString: String,
+    onSwitchCameraClicked: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -117,7 +132,6 @@ fun CameraPreview(mainViewModel: MainViewModel) {
         val cameraProviderFuture = remember(context) { ProcessCameraProvider.getInstance(context) }
         val cameraProvider = remember(cameraProviderFuture) { cameraProviderFuture.get() }
         val executor = remember(context) { ContextCompat.getMainExecutor(context) }
-        var cameraSelector: CameraSelector? by remember { mutableStateOf(null) }
         var camera: Camera? by remember { mutableStateOf(null) }
         var preview by remember { mutableStateOf<androidx.camera.core.Preview?>(null) }
 
@@ -127,27 +141,25 @@ fun CameraPreview(mainViewModel: MainViewModel) {
 
                 cameraProviderFuture.addListener(
                     {
-                        cameraSelector = CameraSelector.Builder()
-                            .requireLensFacing(mainViewModel.camLensFacing.intValue)
-                            .build()
                         val imageAnalysis: ImageAnalysis =
                             ImageAnalysis.Builder()
                                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                 .build()
                                 .also {
                                     it.setAnalyzer(executor) { imageProxy ->
-                                        mainViewModel.onFrameRecieved(imageProxy)
+                                        onFrameRecieved(imageProxy)
                                     }
                                 }
                         try {
                             cameraProvider.unbindAll()
                             camera = cameraProvider.bindToLifecycle(
                                 lifecycleOwner,
-                                cameraSelector as CameraSelector,
+                                cameraSelector,
                                 preview,
                                 imageAnalysis
                             )
-                        } catch (e: Exception) { }
+                        } catch (e: Exception) {
+                        }
                     }, executor
                 )
                 camPreview.Builder().build().also {
@@ -158,12 +170,23 @@ fun CameraPreview(mainViewModel: MainViewModel) {
             modifier = Modifier.fillMaxSize()
         )
         Text(
-            text = if (mainViewModel.lifeDetected.value) "Live" else "Not Live",
+            text = lifeDetectionString,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(16.dp),
             color = Color.White,
             fontSize = 30.sp
         )
+        IconButton(
+            onClick = onSwitchCameraClicked,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_switch_camera_white),
+                contentDescription = ""
+            )
+        }
     }
 }
